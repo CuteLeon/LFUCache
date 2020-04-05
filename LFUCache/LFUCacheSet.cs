@@ -20,7 +20,7 @@ namespace LFUCache
         }
 
         Dictionary<TCacheKey, CacheEntity> entityDictionary = new Dictionary<TCacheKey, CacheEntity>();
-        Dictionary<int, HashSet<CacheEntity>> frequencyDictionary = new Dictionary<int, HashSet<CacheEntity>>();
+        Dictionary<int, LinkedList<CacheEntity>> frequencyDictionary = new Dictionary<int, LinkedList<CacheEntity>>();
         private readonly int capacity;
         public event EventHandler<string> Log;
         private SpinLock spinLock = new SpinLock();
@@ -170,12 +170,11 @@ namespace LFUCache
         /// <returns></returns>
         private CacheEntity GetLeastFrequentEntity()
         {
-            // TODO: 问题=> 相同频率的元素无法确定删除顺序
             if (frequencySortedSet.Count == 0)
                 return default;
             var leastFrequency = frequencySortedSet.Min;
             var result = frequencyDictionary.ContainsKey(leastFrequency) ?
-                frequencyDictionary[leastFrequency].FirstOrDefault() :
+                frequencyDictionary[leastFrequency].First() :
                 null;
             Log?.Invoke(this, $"最不常用缓存：{(result == null ? "[null]" : $"{result.Key.ToString()} (频率={leastFrequency})")}");
             return result;
@@ -209,14 +208,14 @@ namespace LFUCache
             if (!frequencyDictionary.ContainsKey(currentEntity.Frequency))
             {
                 Log?.Invoke(this, $"新建频率Set：{currentEntity.Frequency}");
-                frequencyDictionary.Add(currentEntity.Frequency, new HashSet<CacheEntity>());
+                frequencyDictionary.Add(currentEntity.Frequency, new LinkedList<CacheEntity>());
                 frequencySortedSet.Add(currentEntity.Frequency);
             }
 
             if (!frequencyDictionary[currentEntity.Frequency].Contains(currentEntity))
             {
                 Log?.Invoke(this, $"向频率Set里增加缓存：{$"{currentEntity.Key.ToString()} (频率={currentEntity.Frequency})"}");
-                frequencyDictionary[currentEntity.Frequency].Add(currentEntity);
+                frequencyDictionary[currentEntity.Frequency].AddLast(currentEntity);
             }
         }
 
