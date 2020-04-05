@@ -170,6 +170,7 @@ namespace LFUCache
         /// <returns></returns>
         private CacheEntity GetLeastFrequentEntity()
         {
+            // TODO: 问题=> 相同频率的元素无法确定删除顺序
             if (frequencySortedSet.Count == 0)
                 return default;
             var leastFrequency = frequencySortedSet.Min;
