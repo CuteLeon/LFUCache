@@ -73,19 +73,19 @@ namespace LFUCache
                 Log?.Invoke(this, $"新增缓存：{key}={value}");
                 currentEntity = new CacheEntity(key, value);
                 this.entityDictionary.Add(key, currentEntity);
-                if (entityDictionary.Count > capacity)
-                {
-                    Log?.Invoke(this, $"缓存过多，需要删除最不常用缓存...");
-                    var removeEntity = GetLeastFrequentEntity();
-                    if (removeEntity != null)
-                    {
-                        removeValue = removeEntity.Value;
-                        Remove(removeEntity.Key);
-                    }
-                }
             }
 
             AddToSet(currentEntity);
+            if (entityDictionary.Count > capacity)
+            {
+                Log?.Invoke(this, $"缓存过多，需要删除最不常用缓存...");
+                var removeEntity = GetLeastFrequentEntity();
+                if (removeEntity != null)
+                {
+                    removeValue = removeEntity.Value;
+                    Remove(removeEntity.Key);
+                }
+            }
 
             if (lockSeed)
             {
