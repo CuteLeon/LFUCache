@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.ExceptionServices;
 using System.Threading;
 
 namespace LFUCache
@@ -76,11 +75,12 @@ namespace LFUCache
                 this.entityDictionary.Add(key, currentEntity);
                 if (entityDictionary.Count > capacity)
                 {
+                    Log?.Invoke(this, $"缓存过多，需要删除最不常用缓存...");
                     var removeEntity = GetLeastFrequentEntity();
                     if (removeEntity != null)
                     {
                         removeValue = removeEntity.Value;
-                        RemoveFromSet(removeEntity);
+                        Remove(removeEntity.Key);
                     }
                 }
             }
@@ -164,41 +164,89 @@ namespace LFUCache
 
         #region 频率操作
 
+        /// <summary>
+        /// 获取最不常用缓存
+        /// </summary>
+        /// <returns></returns>
         private CacheEntity GetLeastFrequentEntity()
         {
             if (frequencySortedSet.Count == 0)
                 return default;
             var leastFrequency = frequencySortedSet.Min;
-            return frequencyDictionary.ContainsKey(leastFrequency) ?
+            var result = frequencyDictionary.ContainsKey(leastFrequency) ?
                 frequencyDictionary[leastFrequency].FirstOrDefault() :
                 null;
+            Log?.Invoke(this, $"最不常用缓存：{(result == null ? "[null]" : $"{result.Key.ToString()} (频率={leastFrequency})")}");
+            return result;
         }
 
+        /// <summary>
+        /// 从频率Set移除缓存
+        /// </summary>
+        /// <param name="currentEntity"></param>
         private void RemoveFromSet(CacheEntity currentEntity)
         {
             if (!frequencyDictionary.ContainsKey(currentEntity.Frequency))
                 return;
             var frequencySet = frequencyDictionary[currentEntity.Frequency];
             frequencySet.Remove(currentEntity);
+            Log?.Invoke(this, $"从频率Set移除缓存：{$"{currentEntity.Key.ToString()} (频率={currentEntity.Frequency})"}");
             if (frequencySortedSet.Min == currentEntity.Frequency && frequencySet.Count == 0)
             {
+                Log?.Invoke(this, $"同时移除当前的空频率Set：{currentEntity.Frequency}");
                 frequencyDictionary.Remove(currentEntity.Frequency);
                 frequencySortedSet.Remove(frequencySortedSet.Min);
             }
         }
 
+        /// <summary>
+        /// 添加缓存到Set
+        /// </summary>
+        /// <param name="currentEntity"></param>
         private void AddToSet(CacheEntity currentEntity)
         {
             if (!frequencyDictionary.ContainsKey(currentEntity.Frequency))
             {
+                Log?.Invoke(this, $"新建频率Set：{currentEntity.Frequency}");
                 frequencyDictionary.Add(currentEntity.Frequency, new HashSet<CacheEntity>());
                 frequencySortedSet.Add(currentEntity.Frequency);
             }
 
             if (!frequencyDictionary[currentEntity.Frequency].Contains(currentEntity))
             {
+                Log?.Invoke(this, $"向频率Set里增加缓存：{$"{currentEntity.Key.ToString()} (频率={currentEntity.Frequency})"}");
                 frequencyDictionary[currentEntity.Frequency].Add(currentEntity);
             }
+        }
+
+        /// <summary>
+        /// 获取频率集合
+        /// </summary>
+        /// <returns></returns>
+        public Dictionary<int, List<TCacheKey>> GetFrequencyList()
+        {
+            var lockSeed = false;
+            if (!this.spinLock.IsHeldByCurrentThread)
+            {
+                this.spinLock.Enter(ref lockSeed);
+            }
+
+            var result = new Dictionary<int, List<TCacheKey>>();
+            foreach (var frequency in frequencySortedSet)
+            {
+                var cacheKeys = frequencyDictionary[frequency].Select(entity => entity.Key).ToList();
+                result.Add(frequency, cacheKeys);
+            }
+
+            if (lockSeed)
+            {
+                this.spinLock.Exit();
+            }
+
+            Log?.Invoke(this, $"获取EntityDictionary列表：\n\t{string.Join("\n\t", this.entityDictionary.Keys)}");
+            Log?.Invoke(this, $"获取频率字典列表：\n\t{string.Join("\n\t", result.Select(pair => $"频率={pair.Key} : {string.Join("、", pair.Value)}"))}");
+
+            return result;
         }
         #endregion
     }
